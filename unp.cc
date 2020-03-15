@@ -1,4 +1,5 @@
 #include "unp.h"
+
 static int daemon_proc;
 
 struct sockaddr_in makeAddr(char const *addr, uint16_t port) {
@@ -69,19 +70,62 @@ host_serv(const char *host, const char *serv, int family, int socktype) {
 }
 
 
-char *sock_ntop(const struct sockaddr *sa, socklen_t salen) {
-    char        portstr[8];
-    static char str[128];
-    switch (sa->sa_family) {
-        case AF_INET:
-            struct sockaddr_in *sin = (struct sockaddr_in *)sa;
+char *sock_ntop(const struct sockaddr *addr, socklen_t salen) {
+    static char str[64];
 
+    switch (addr->sa_family) {
+        case AF_INET: {
+            struct sockaddr_in *sin = (struct sockaddr_in *)addr;
             if (inet_ntop(AF_INET, &sin->sin_addr, str, sizeof(str)) == NULL)
                 return NULL;
-            if (ntohs(sin->sin_port) != 0) {
-                snprintf(portstr, sizeof(portstr), ":%d", ntohs(sin->sin_port));
-                strcat(str, portstr);
-            }
-            return str;
+            break;
+        }
+
+        case AF_INET6: {
+            struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)addr;
+            if (inet_ntop(AF_INET6, &sin6->sin6_addr, str, sizeof(str)) == NULL)
+                return NULL;
+            break;
+        }
     }
+
+    return str;
+}
+
+
+void sockSetPort(struct sockaddr *sa, int port) {
+    ((struct sockaddr_in *)sa)->sin_port = htons(port);
+}
+
+void error_exit(const char *s) {
+    perror(s);
+    exit(-1);
+}
+
+
+int sock_cmp_addr(const struct sockaddr *a1, const struct sockaddr *a2) {
+    if (a1->sa_family != a2->sa_family)
+        return -1;
+
+    switch (a1->sa_family) {
+        case AF_INET:
+            return memcmp(&((struct sockaddr_in *)a1)->sin_addr,
+                          &((struct sockaddr_in *)a2)->sin_addr,
+                          sizeof(struct in_addr));
+
+        case AF_INET6:
+            return memcmp(&((struct sockaddr_in6 *)a1)->sin6_addr,
+                          &((struct sockaddr_in6 *)a2)->sin6_addr,
+                          sizeof(struct in6_addr));
+    }
+
+    return -1;
+}
+
+void tv_sub(struct timeval *tv1, struct timeval *tv2) {
+    if ((tv1->tv_usec -= tv2->tv_usec) < 0) {
+        --tv1->tv_sec;
+        tv1->tv_usec += 1000000;
+    }
+    tv1->tv_sec -= tv2->tv_sec;
 }
