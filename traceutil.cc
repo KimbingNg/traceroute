@@ -31,6 +31,7 @@ int recv_ip4(int seq, struct timeval *tv) {
         len = pr->addrLen;
         n   = recvfrom(recvfd, recvbuf, sizeof(recvbuf), 0, pr->receiveAddr,
                      &len);
+
         if (n < 0) {
             if (errno == EINTR)
                 continue;
@@ -44,39 +45,35 @@ int recv_ip4(int seq, struct timeval *tv) {
         iphlen1 = ip1->ip_hl << 2;
 
         icmp = (struct icmp *)(recvbuf + iphlen1);
+
+        // not enough to look at ICMP header
         if ((icmplen = n - iphlen1) < ICMP_HLEN)
             continue;
 
-        if (icmp->icmp_type == ICMP_TIMXCEED &&
-            icmp->icmp_code == ICMP_TIMXCEED_INTRANS) {
-            if (icmplen < ICMP_HLEN + sizeof(struct ip))
-                continue;
+        if (!((icmp->icmp_type == ICMP_TIMXCEED &&
+               icmp->icmp_code == ICMP_TIMXCEED_INTRANS) ||
+              icmp->icmp_type == ICMP_UNREACH))
+            continue;
 
-            ip2     = (struct ip *)(recvbuf + iphlen1 + ICMP_HLEN);
-            iphlen2 = ip2->ip_hl << 2;
+        // not enough to look at the inner IP
+        if (icmplen < ICMP_HLEN + sizeof(struct ip))
+            continue;
 
-            if (icmplen < ICMP_HLEN + iphlen2 + UDP_HLEN)
-                continue;
+        ip2     = (struct ip *)(recvbuf + iphlen1 + ICMP_HLEN);
+        iphlen2 = ip2->ip_hl << 2;
 
-            udp = (struct udphdr *)(recvbuf + iphlen1 + ICMP_HLEN + iphlen2);
-            if (ip2->ip_p == IPPROTO_UDP && udp->source == htons(sport) &&
-                udp->dest == htons(dport + seq)) {
+        if (icmplen < ICMP_HLEN + iphlen2 + UDP_HLEN)
+            continue;
+
+        udp = (struct udphdr *)(recvbuf + iphlen1 + ICMP_HLEN + iphlen2);
+        if (ip2->ip_p == IPPROTO_UDP && udp->source == htons(sport) &&
+            udp->dest == htons(dport + seq)) {
+            if (icmp->icmp_type == ICMP_TIMXCEED &&
+                icmp->icmp_code == ICMP_TIMXCEED_INTRANS) {
                 ret = TRACE_RESULT_TIMEEXCEED;
                 break;
             }
-        }
-        else if (icmp->icmp_type == ICMP_UNREACH) {
-            if (icmplen < ICMP_HLEN + sizeof(struct ip))
-                continue;
-
-            ip2     = (struct ip *)(recvbuf + iphlen1 + ICMP_HLEN);
-            iphlen2 = ip2->ip_hl << 2;
-            if (icmplen < ICMP_HLEN + iphlen2 + UDP_HLEN)
-                continue;
-
-            udp = (struct udphdr *)(recvbuf + iphlen1 + ICMP_HLEN + iphlen2);
-            if (ip2->ip_p == IPPROTO_UDP && udp->source == htons(sport) &&
-                udp->dest == htons(dport + seq)) {
+            else if (icmp->icmp_type == ICMP_UNREACH) {
                 if (icmp->icmp_code == ICMP_UNREACH_PORT)
                     ret = TRACE_RESULT_UNREACH;
                 else

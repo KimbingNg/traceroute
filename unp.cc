@@ -18,10 +18,6 @@ void err_quit(const char *__s, ...) {
     va_start(ap, __s);
     err_doit(0, LOG_ERR, __s, ap);
     va_end(ap);
-
-
-    // fprintf(stderr, __s, ++k);
-    // exit(-1);
 }
 
 static void err_doit(int errnoflag, int level, const char *fmt, va_list ap) {

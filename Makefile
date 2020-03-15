@@ -1,6 +1,6 @@
 
 all: main.o trace.o unp.o sig_alarm.o traceutil.o
-	g++ $^
+	g++ $^ -o traceroute
 
 %: %.cc unp.o
 	g++ $^ -o $@
